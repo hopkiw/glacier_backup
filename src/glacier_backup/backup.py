@@ -42,6 +42,10 @@ class Backup(object):
             else:
                 raise e
 
+    def _unlock(self):
+        if self.s:
+            self.s.close()
+
     def _setup_logging(self):
         logging.basicConfig()
         self.log = logging.getLogger()
@@ -64,7 +68,7 @@ class Backup(object):
         self.log.debug(f'backup({path})')
 
         if self.dryrun:
-            self.log.info(f'dry run: would have uploaded {path.path}')
+            self.log.info(f'dry run: would have uploaded {path}')
             return False
 
         tarpath = ''
@@ -72,10 +76,10 @@ class Backup(object):
             tarfilename = path.name.replace(' ', '_') + '.tar'
             tarpath = os.path.join('/tmp/glacier_backup', tarfilename)
 
-            self.log.debug(f'tar cf {tarpath} {path.path}')
+            self.log.debug(f'tar cf {tarpath} {path}')
             try:
                 # Create the tarball.
-                subprocess.check_call(['tar', 'cf', tarpath, path.path])
+                subprocess.check_call(['tar', 'cf', tarpath, path.as_posix()])
             except Exception as e:
                 self.log.error('failed to tar: ' + e)
                 raise self.BackupException(e)
@@ -84,8 +88,8 @@ class Backup(object):
             if tarpath:
                 archive_id = self.uploader.upload(tarpath, tarfilename)
             else:
-                archive_id = self.uploader.upload(path.path)
-            self.mark_uploaded(tarpath or path.path, archive_id)
+                archive_id = self.uploader.upload(path.as_posix())
+            self.mark_uploaded(tarpath or path.as_posix(), archive_id)
         except OngoingUploadException as e:
             self.log.error('Failed to upload: ' + e)
             raise e  # cant handle this here
@@ -144,10 +148,10 @@ class Backup(object):
             for entry in it:
                 if entry.is_dir() and upload_dirs:
                     if self.needs_upload(entry, upload_if_changed):
-                        yield entry
+                        yield pathlib.Path(entry.path)
                 if entry.is_file() and upload_files:
                     if self.needs_upload(entry, upload_if_changed):
-                        yield entry
+                        yield pathlib.Path(entry.path)
 
 
 def main():

@@ -3,6 +3,5 @@
 A utility to manage backups to AWS S3 Glacier.
 
 TODO:
-* Tests
-* Finish refactor
-* Add setup.py
+* travis CI
+* more tests
