@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 
+import logging
 import os
+import pathlib
 import socket
 import subprocess
-import logging
-import pathlib
 
 import boto3
 
-from .glacier import GlacierDB, OngoingUploadException
-from .uploader import Uploader
+from glacier_backup.glacier import GlacierDB
+from glacier_backup.uploader import Uploader
+
+
+class AlreadyUploadedException(Exception):
+    """This file has already been uploaded"""
+
+
+class OngoingUploadException(Exception):
+    """There is an active upload"""
 
 
 class Backup(object):
-    class BackupException(Exception):
-        pass
-
     def __init__(self, config, dryrun=False):
         self.config = config
         self.dryrun = dryrun
@@ -35,7 +40,7 @@ class Backup(object):
             if e.errno == 98:  # 'Address already in use'
                 raise OngoingUploadException()
             else:
-                raise self.BackupException(e)
+                raise e
 
     def _setup_logging(self):
         logging.basicConfig()
@@ -115,7 +120,7 @@ class Backup(object):
 
     def needs_upload(self, file, upload_if_changed):
         uploaded_date = self.db.get_uploaded_date(file.path)
-        print(f'last uploaded date for {file}: {uploaded_date}')
+        # print(f'last uploaded date for {file}: {uploaded_date}')
         if not uploaded_date:
             return True
         if upload_if_changed and file.stat().st_mtime > uploaded_date:
@@ -124,7 +129,7 @@ class Backup(object):
 
     def backup_candidates(self, path, single_dir=False, upload_files=False,
                           upload_dirs=False, upload_if_changed=False):
-        """Returns a generator with backup candidates from config."""
+        """Returns a generator of backup candidates."""
         if os.path.isfile(path):
             yield pathlib.Path(path)
             return
@@ -149,8 +154,6 @@ def main():
     import sys
     import argparse
     import configparser
-
-    from glacier_backup import Backup, OngoingUploadException
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dryrun',

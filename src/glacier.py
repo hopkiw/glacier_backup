@@ -8,14 +8,6 @@ import logging
 log = logging.getLogger()
 
 
-class AlreadyUploadedException(Exception):
-    """This file has already been uploaded"""
-
-
-class OngoingUploadException(Exception):
-    """There is an active upload"""
-
-
 class GlacierDB(object):
     def __init__(self, account='-', vault='default', backupdb=None):
         """Glacier functions with local state DB"""
