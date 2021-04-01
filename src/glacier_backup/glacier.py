@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
+import logging
 import os
 import sqlite3
 import time
-import logging
 
 log = logging.getLogger()
 

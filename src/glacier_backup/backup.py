@@ -5,6 +5,7 @@ import os
 import pathlib
 import socket
 import subprocess
+from typing import Generator
 
 import boto3
 
@@ -132,7 +133,8 @@ class Backup(object):
         return False
 
     def backup_candidates(self, path, single_dir=False, upload_files=False,
-                          upload_dirs=False, upload_if_changed=False):
+                          upload_dirs=False,
+                          upload_if_changed=False) -> Generator[pathlib.Path]:
         """Returns a generator of backup candidates."""
         if os.path.isfile(path):
             yield pathlib.Path(path)

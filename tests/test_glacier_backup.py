@@ -1,9 +1,10 @@
 """Tests module."""
 import os
-import pytest
 import pathlib
 
 from glacier_backup.backup import Backup, OngoingUploadException
+
+import pytest
 
 
 def test_locking():

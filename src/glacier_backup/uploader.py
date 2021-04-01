@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import boto3
 import hashlib
 import logging
 import math
 import os
 import queue
 import threading
+
+import boto3
 
 # the following helper functions are from boto.glacier.utils. They didn't
 # provide equivalents in boto3 that I can find.
