@@ -23,7 +23,8 @@ setup(
     },
     entry_points={  # Optional
         'console_scripts': [
-            'glacier_backup=glacier_backup.backup:main',
+            'glacier-backup=glacier_backup.backup:main',
+            'glacier-upload=glacier_backup.upload:main',
         ],
     },
 )
