@@ -175,7 +175,3 @@ def main():
 
     uploader = Uploader()
     uploader.upload(args.filename)
-
-
-if __name__ == "__main__":
-    main()

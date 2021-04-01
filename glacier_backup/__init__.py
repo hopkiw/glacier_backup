@@ -1,4 +1,6 @@
 from .backup import Backup
-from .glacier import GlacierDB, OngoingUploadException
+from .glacier import GlacierDB
+from .uploader import Uploader
 
-__all__ = ['Backup', 'GlacierDB', 'OngoingUploadException']
+# Objects which can be imported from this library.
+__all__ = ['Backup', 'GlacierDB', 'Uploader']

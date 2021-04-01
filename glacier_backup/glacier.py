@@ -4,9 +4,6 @@ import os
 import sqlite3
 import time
 import logging
-import boto3
-
-from .uploader import Uploader
 
 log = logging.getLogger()
 
@@ -43,4 +40,3 @@ class GlacierDB(object):
                       f'{archiveid},{date})')
             cur.execute('INSERT INTO uploads VALUES (?,?,?,?)',
                         (filename, uploaded_as, archiveid, date))
-

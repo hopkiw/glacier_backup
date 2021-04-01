@@ -143,3 +143,44 @@ class Backup(object):
                 if entry.is_file() and upload_files:
                     if self.needs_upload(entry, upload_if_changed):
                         yield entry
+
+
+def main():
+    import sys
+    import argparse
+    import configparser
+
+    from glacier_backup import Backup, OngoingUploadException
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--dryrun',
+                        help='only show what would be backed up',
+                        action='store_true')
+    parser.add_argument('-c', '--config', help='file of backup paths')
+    parser.add_argument('-p', '--path', dest='paths', nargs='*',
+                        help=('path of file or dir to backup. will override '
+                              'paths specified in config'))
+    args = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    # args.path overrides config.
+    if args.paths:
+        for path in args.paths:
+            # we treat each provided path as the object to be uploaded,
+            # whether file or dir.
+            config[path] = {'upload_single_dir': True}
+    else:
+        config.read(args.config or os.path.join(
+            os.environ.get('HOME'),
+            '.config',
+            'glacier_backups',
+            'glacier_backups.conf'))
+
+    try:
+        Backup(config, args.dryrun).run()
+    except OngoingUploadException:
+        print('backup already in progress, exiting')
+        sys.exit(1)
+    except Backup.BackupException as e:
+        print('Error: ' + e)
+        sys.exit(1)
