@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='glacier_backup',  # Required
@@ -16,7 +16,9 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3 :: Only',
     ],
-    packages=['glacier_backup'],
+    #packages=['glacier_backup'],
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
     python_requires='>=3.6, <4',
     package_data={  # Optional
         'glacier_backup.conf': ['glacier_backup.conf'],
