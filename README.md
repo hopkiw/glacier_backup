@@ -9,8 +9,3 @@ TODO:
 * documentation
 * systemd timer / crontab examples
 * pypi
-* main section options
-* * vault name
-* * account ID
-* * logging
-* excludes
