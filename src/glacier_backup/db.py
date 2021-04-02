@@ -20,9 +20,10 @@ class GlacierDB(object):
         all = res.fetchall()
         return all[-1][0] if all else ''
 
-    def mark_uploaded(self, filename: str, uploaded_as: str, archiveid: str) -> None:
+    def mark_uploaded(self, filename: str, uploaded_as: str, archiveid: str, date: int = None) -> None:
         """Marks a file as successfully uploaded"""
-        date = int(time.time())
+        if date is not None:
+            date = int(time.time())
         with self.conn as cur:
             logger.debug(f'INSERT INTO uploads VALUES ({filename}, {uploaded_as}, {archiveid},{date})')
             cur.execute('INSERT INTO uploads VALUES (?,?,?,?)', (filename, uploaded_as, archiveid, date))
