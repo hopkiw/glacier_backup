@@ -6,7 +6,9 @@ import math
 import os
 import queue
 import threading
-from typing import List, cast, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, cast
+
+from botocore.exceptions import ClientError
 
 if TYPE_CHECKING:
     from mypy_boto3_glacier.service_resource import MultipartUpload
@@ -15,7 +17,8 @@ else:
     MultipartUpload = object
     Vault = object
 
-# from boto3.resources.factory import glacier
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 # the following helper functions are from boto.glacier.utils. They didn't
 # provide equivalents in boto3 that I can find.
@@ -49,8 +52,7 @@ def tree_hash(fo: List[bytes]) -> str:
     return bytes.hex(hashes[0])
 
 
-def chunk_hashes(bytestring: bytes,
-                 chunk_size: int = _MEGABYTE) -> List[bytes]:
+def chunk_hashes(bytestring: bytes, chunk_size: int = _MEGABYTE) -> List[bytes]:
     chunk_count = int(math.ceil(len(bytestring) / float(chunk_size)))
     hashes = []
     for i in range(chunk_count):
@@ -63,13 +65,8 @@ def chunk_hashes(bytestring: bytes,
 
 
 class UploaderThread(threading.Thread):
-    def __init__(self,
-                 multipart_upload: MultipartUpload,
-                 work_queue: queue.Queue,
-                 hash_queue: queue.Queue,
-                 filename: str,
-                 part_size: int,
-                 err: threading.Event):
+    def __init__(self, multipart_upload: MultipartUpload, work_queue: queue.Queue, hash_queue: queue.Queue,
+                 filename: str, part_size: int, err: threading.Event) -> None:
         super(UploaderThread, self).__init__()
         self.multipart_upload = multipart_upload
         self.work_queue = work_queue
@@ -81,11 +78,11 @@ class UploaderThread(threading.Thread):
     def run(self) -> None:
         while not self.work_queue.empty() and not self.err.is_set():
             offset = self.work_queue.get()
-            logging.info(f'uploading part {offset}')
+            logger.info(f'uploading part {offset}')
             try:
                 chunk = self.readfile(offset)
                 part_hash = self.upload_part(chunk, offset)
-            except Exception:
+            except Exception:  # Yes, all exceptions.
                 self.err.set()
                 break
             self.hash_queue.put((offset, part_hash))
@@ -102,10 +99,7 @@ class UploaderThread(threading.Thread):
         first_byte = offset * self.part_size
         last_byte = first_byte + len(chunk) - 1
         rangestr = f'bytes {first_byte}-{last_byte}/*'
-        self.multipart_upload.upload_part(
-            range=rangestr,
-            checksum=hashstr,
-            body=chunk)
+        self.multipart_upload.upload_part(range=rangestr, checksum=hashstr, body=chunk)
 
         return part_hash
 
@@ -127,12 +121,11 @@ class Uploader():
         total_parts = int((filesize / part_size) + 1)
 
         self.multipart_upload: MultipartUpload
-        self.multipart_upload = self.vault.initiate_multipart_upload(
-            archiveDescription=description,
-            partSize=str(part_size))
+        self.multipart_upload = self.vault.initiate_multipart_upload(archiveDescription=description,
+                                                                     partSize=str(part_size))
 
-        logging.info(f'created upload {self.multipart_upload.id} for file'
-                     f' {filename} with description {description}.')
+        logger.info(f'created upload {self.multipart_upload.id} for file {filename} with description '
+                    f'{description}.')
 
         for part in range(total_parts):
             work_queue.put(part)
@@ -140,13 +133,7 @@ class Uploader():
         err = threading.Event()
         ts = []
         for i in range(self.concurrent_uploads):
-            t = UploaderThread(
-                self.multipart_upload,
-                work_queue,
-                hash_queue,
-                filename,
-                part_size,
-                err)
+            t = UploaderThread(self.multipart_upload, work_queue, hash_queue, filename, part_size, err)
             t.daemon = True
             ts.append(t)
 
@@ -158,29 +145,27 @@ class Uploader():
 
         if err.is_set():
             self.multipart_upload.abort()
-            return ''
+            raise self.UploadFailedException('error uploading parts')
 
         res = [None] * total_parts
         while not hash_queue.empty():
             part, hash_ = hash_queue.get()
             res[part] = hash_
         if None in res:
-            logging.error('error uploading parts: missing hash in result')
-            return ''
+            self.multipart_upload.abort()
+            raise self.UploadFailedException('error uploading parts: missing hash in result')
 
         final_checksum = tree_hash(cast(List[bytes], res))
-        logging.info(f'completing upload {self.multipart_upload.id}')
+        logger.info(f'completing upload {self.multipart_upload.id}')
         try:
-            ret = self.multipart_upload.complete(
-                archiveSize=str(filesize),
-                checksum=final_checksum)
-            logging.info(f'upload {self.multipart_upload.id} is complete,'
-                         f' archive id is {ret["archiveId"]}')
-            return ret['archiveId']
-        except Exception as e:
-            logging.error(f'error completing upload: {e}')
+            ret = self.multipart_upload.complete(archiveSize=str(filesize), checksum=final_checksum)
+        except ClientError as e:
+            logger.error(f'error completing upload: {e}')
             self.multipart_upload.abort()
-            return ''
+            raise
+
+        logger.info(f'upload {self.multipart_upload.id} is complete, archive id is {ret["archiveId"]}')
+        return ret['archiveId']
 
 
 def main():
