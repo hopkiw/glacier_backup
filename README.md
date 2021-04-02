@@ -7,3 +7,4 @@ TODO:
 * more tests
 * finish type checking
 * update logging
+* bootstrapping missing DB and conf
