@@ -5,12 +5,20 @@ import os
 import pathlib
 import socket
 import subprocess
-from typing import Generator
+from configparser import ConfigParser
+from typing import Generator, TYPE_CHECKING
 
 import boto3
 
 from glacier_backup.glacier import GlacierDB
 from glacier_backup.uploader import Uploader
+
+if TYPE_CHECKING:
+    from mypy_boto3_glacier.service_resource import Vault
+    from mypy_boto3_glacier.service_resource import GlacierServiceResource
+else:
+    Vault = object
+    GlacierServiceResource = object
 
 
 class AlreadyUploadedException(Exception):
@@ -22,18 +30,18 @@ class OngoingUploadException(Exception):
 
 
 class Backup(object):
-    def __init__(self, config, dryrun=False):
+    def __init__(self, config: ConfigParser, dryrun: bool = False):
         self.config = config
         self.dryrun = dryrun
         self._lock()
         self.db = GlacierDB()
-        glacier = boto3.resource("glacier")
-        self.vault = glacier.Vault("-", "default")
+        glacier: GlacierServiceResource = boto3.resource("glacier")
+        self.vault: Vault = glacier.Vault("-", "default")  # TODO: take as args
 
         self.uploader = Uploader(self.vault)
         self._setup_logging()
 
-    def _lock(self):
+    def _lock(self) -> None:
         try:
             self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.s.bind('\0' + self.__class__.__name__)
@@ -43,11 +51,11 @@ class Backup(object):
             else:
                 raise e
 
-    def _unlock(self):
+    def _unlock(self) -> None:
         if self.s:
             self.s.close()
 
-    def _setup_logging(self):
+    def _setup_logging(self) -> None:
         logging.basicConfig()
         self.log = logging.getLogger()
         self.log.setLevel(logging.INFO)
@@ -55,8 +63,9 @@ class Backup(object):
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+        home: str = os.environ.get('HOME') or ''
         fh = logging.FileHandler(os.path.join(
-            os.environ.get('HOME'),
+            home,
             '.config',
             'glacier_backups',
             'glacier_backups.log'))
@@ -64,7 +73,7 @@ class Backup(object):
 
         self.log.addHandler(fh)
 
-    def backup_file(self, path):
+    def backup_file(self, path: pathlib.Path) -> bool:
         """Backup a single file or directory"""
         self.log.debug(f'backup({path})')
 
@@ -82,26 +91,22 @@ class Backup(object):
                 # Create the tarball.
                 subprocess.check_call(['tar', 'cf', tarpath, path.as_posix()])
             except Exception as e:
-                self.log.error('failed to tar: ' + e)
-                raise self.BackupException(e)
-
-        try:
-            if tarpath:
-                archive_id = self.uploader.upload(tarpath, tarfilename)
-            else:
-                archive_id = self.uploader.upload(path.as_posix())
-            self.mark_uploaded(tarpath or path.as_posix(), archive_id)
-        except OngoingUploadException as e:
-            self.log.error('Failed to upload: ' + e)
-            raise e  # cant handle this here
+                self.log.error(f'failed to tar: {e}')
+                raise e
 
         if tarpath:
-            # Remove the tarball.
+            archive_id = self.uploader.upload(tarpath, tarfilename)
+            if archive_id:
+                self.db.mark_uploaded(tarpath, tarfilename, archive_id)
             os.remove(tarpath)
+        else:
+            archive_id = self.uploader.upload(path.as_posix())
+            if archive_id:
+                self.db.mark_uploaded(path.as_posix(), path.name, archive_id)
 
         return True
 
-    def run(self):
+    def run(self) -> bool:
         """Run all configured backups"""
         sections = self.config.sections()
         for name, cfg in [(x.rstrip('/'), self.config[x]) for x in sections]:
@@ -122,19 +127,23 @@ class Backup(object):
                     upload_files, upload_dirs, upload_if_changed):
                 if self.backup_file(candidate):
                     return True
+        return False  # never found an upload or never succeeded.
 
-    def needs_upload(self, file, upload_if_changed):
-        uploaded_date = self.db.get_uploaded_date(file.path)
-        # print(f'last uploaded date for {file}: {uploaded_date}')
+    def needs_upload(self, file: pathlib.Path,
+                     upload_if_changed: bool = False) -> bool:
+        uploaded_date = self.db.get_uploaded_date(file.as_posix())
         if not uploaded_date:
             return True
-        if upload_if_changed and file.stat().st_mtime > uploaded_date:
+        if upload_if_changed and file.stat().st_mtime > float(uploaded_date):
             return True
         return False
 
-    def backup_candidates(self, path, single_dir=False, upload_files=False,
-                          upload_dirs=False,
-                          upload_if_changed=False) -> Generator[pathlib.Path]:
+    def backup_candidates(self, path: str,
+                          single_dir: bool = False,
+                          upload_files: bool = False,
+                          upload_dirs: bool = False,
+                          upload_if_changed: bool = False
+                          ) -> Generator[pathlib.Path, None, None]:
         """Returns a generator of backup candidates."""
         if os.path.isfile(path):
             yield pathlib.Path(path)
@@ -149,11 +158,13 @@ class Backup(object):
         with os.scandir(path) as it:
             for entry in it:
                 if entry.is_dir() and upload_dirs:
-                    if self.needs_upload(entry, upload_if_changed):
-                        yield pathlib.Path(entry.path)
+                    rentry = pathlib.Path(entry)
+                    if self.needs_upload(rentry, upload_if_changed):
+                        yield rentry
                 if entry.is_file() and upload_files:
-                    if self.needs_upload(entry, upload_if_changed):
-                        yield pathlib.Path(entry.path)
+                    rentry = pathlib.Path(entry)
+                    if self.needs_upload(rentry, upload_if_changed):
+                        yield rentry
 
 
 def main():
