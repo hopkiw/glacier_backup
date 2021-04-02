@@ -8,3 +8,6 @@ TODO:
 * finish type checking
 * update logging
 * bootstrapping missing DB and conf
+* documentation
+* systemd timer / crontab examples
+* pypi
