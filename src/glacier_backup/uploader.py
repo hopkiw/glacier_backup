@@ -78,7 +78,7 @@ class UploaderThread(threading.Thread):
     def run(self) -> None:
         while not self.work_queue.empty() and not self.err.is_set():
             offset = self.work_queue.get()
-            logger.info(f'uploading part {offset}')
+            logger.debug(f'uploading part {offset}')
             try:
                 chunk = self.readfile(offset)
                 part_hash = self.upload_part(chunk, offset)

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import logging
+import os
 import sqlite3
 import time
 
@@ -12,6 +13,9 @@ class GlacierDB(object):
     def __init__(self, backupdb: str) -> None:
         """Glacier functions with local state DB"""
         self.conn = sqlite3.connect(backupdb)
+        if not os.path.exists(backupdb):
+            self.conn.execute('CREATE TABLE IF NOT EXISTS "uploads" (path text, name text, archive_id text,'
+                              ' uploaded_date integer')
 
     def get_uploaded_date(self, filename: str) -> str:
         """Checks if a file has already been uploaded"""

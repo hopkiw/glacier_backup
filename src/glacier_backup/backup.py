@@ -96,6 +96,7 @@ class Backup(object):
         """Run all configured backups"""
         for candidate in self.backup_candidates():
             try:
+                logger.info(f'Starting backup for path {candidate}')
                 self.backup_file(candidate)
             except (self.uploader.UploadFailedException, ClientError) as e:
                 logger.error(f'failed to upload {candidate}: {e}')
@@ -119,7 +120,7 @@ class Backup(object):
                 logger.debug(f'skipping nonexistent path {name}')
                 continue
 
-            logger.info(f'starting on {name}')
+            logger.info(f'checking [{name}]')
 
             upload_if_changed = cfg.getboolean('upload_if_changed')
             upload_single_dir = cfg.getboolean('upload_single_dir')
@@ -165,7 +166,7 @@ def setup_logging(logfile: str = None) -> None:
 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-    if logfile:
+    if logfile and os.path.exists(logfile):
         fh = logging.FileHandler(logfile, mode='a')
         fh.setFormatter(formatter)
         log.addHandler(fh)
@@ -198,6 +199,9 @@ def main():
             # we treat each provided path as the object to be uploaded, whether file or dir.
             config[path] = {'upload_single_dir': True}
     else:
+        if not os.path.exists(args.config):
+            print('no config file found, quitting.')
+            return
         config.read(args.config)
 
     if args.vault:
