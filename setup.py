@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='glacier-backup',
-    version='1.1',
+    version='1.2',
     description='A Python client for performing backups to AWS S3 Glacier',
     long_description='A Python client for performing backups to AWS S3 Glacier',
     url='https://github.com/hopkiw/glacier_backup',
