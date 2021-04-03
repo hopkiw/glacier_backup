@@ -1,12 +1,13 @@
 from setuptools import find_packages, setup
 
 setup(
-    name='glacier_backup',  # Required
-    version='1.0',  # Required
+    name='glacier-backup',
+    version='1.1',
     description='A Python client for performing backups to AWS S3 Glacier',
-    url='https://github.com/hopkiw/glacier_backup',  # Optional
-    author='Liam Hopkins',  # Optional
-    classifiers=[  # Optional
+    long_description='A Python client for performing backups to AWS S3 Glacier',
+    url='https://github.com/hopkiw/glacier_backup',
+    author='Liam Hopkins',
+    classifiers=[
         'Development Status :: 4 - Beta',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
@@ -19,10 +20,13 @@ setup(
     packages=find_packages('src'),
     package_dir={'': 'src'},
     python_requires='>=3.6, <4',
-    package_data={  # Optional
+    install_requires=[
+        'botocore>=1.12.103',
+    ],
+    package_data={
         'glacier_backup.conf': ['glacier_backup.conf'],
     },
-    entry_points={  # Optional
+    entry_points={
         'console_scripts': [
             'glacier-backup=glacier_backup.backup:main',
             'glacier-upload=glacier_backup.upload:main',
