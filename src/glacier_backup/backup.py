@@ -182,9 +182,11 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dryrun', help='only show what would be backed up', action='store_true')
-    parser.add_argument('-c', '--config', help='config file location',
+    parser.add_argument('-c', '--config', help='config file location. defaults'
+                        ' to ${HOME}/.config/glacier_backup/glacier_backups.conf',
                         default=os.path.join(CONFDIR, 'glacier_backups.conf'))
-    parser.add_argument('-l', '--logfile', help='backup log file. omit for stdout',
+    parser.add_argument('-l', '--logfile', help='backup log file. defaults'
+                        ' to ${HOME}/.config/glacier_backup/glacier_backups.log',
                         default=os.path.join(CONFDIR, 'glacier_backups.log'))
     parser.add_argument('-v', '--vault', help='name of vault to use')
     parser.add_argument('-a', '--account', help='account ID to use')
