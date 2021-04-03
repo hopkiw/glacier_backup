@@ -26,7 +26,7 @@ class GlacierDB(object):
 
     def mark_uploaded(self, filename: str, uploaded_as: str, archiveid: str, date: int = None) -> None:
         """Marks a file as successfully uploaded"""
-        if date is not None:
+        if date is None:
             date = int(time.time())
         with self.conn as cur:
             logger.debug(f'INSERT INTO uploads VALUES ({filename}, {uploaded_as}, {archiveid},{date})')

@@ -28,7 +28,7 @@ DEFAULT_PART_SIZE = 4 * _MEGABYTE
 MAXIMUM_NUMBER_OF_PARTS = 10000
 
 
-def tree_hash(fo: List[bytes]) -> str:
+def tree_hash(fo: List[bytes]) -> bytes:
     """
     Given a hash of each 1MB chunk (from chunk_hashes) this will hash
     together adjacent hashes until it ends up with one big one. So a
@@ -49,7 +49,7 @@ def tree_hash(fo: List[bytes]) -> str:
             else:
                 break
         hashes.extend(new_hashes)
-    return bytes.hex(hashes[0])
+    return hashes[0]
 
 
 def chunk_hashes(bytestring: bytes, chunk_size: int = _MEGABYTE) -> List[bytes]:
@@ -93,9 +93,9 @@ class UploaderThread(threading.Thread):
             fileobj.seek(offset * self.part_size)
             return fileobj.read(self.part_size)
 
-    def upload_part(self, chunk: bytes, offset: int) -> str:
+    def upload_part(self, chunk: bytes, offset: int) -> bytes:
         part_hash = tree_hash(chunk_hashes(chunk))
-        hashstr = str(tree_hash(chunk_hashes(chunk)))
+        hashstr = bytes.hex(part_hash)
         first_byte = offset * self.part_size
         last_byte = first_byte + len(chunk) - 1
         rangestr = f'bytes {first_byte}-{last_byte}/*'
@@ -114,19 +114,38 @@ class Uploader():
 
     def upload(self, filename: str, description: str = None) -> str:
         description = description or os.path.basename(filename)
-        work_queue: queue.Queue = queue.Queue()
-        hash_queue: queue.Queue = queue.Queue()
         filesize = os.stat(filename).st_size
         part_size = DEFAULT_PART_SIZE
-        total_parts = int((filesize / part_size) + 1)
 
         self.multipart_upload: MultipartUpload
         self.multipart_upload = self.vault.initiate_multipart_upload(archiveDescription=description,
                                                                      partSize=str(part_size))
+        logger.debug(f'created multipart_upload {self.multipart_upload.id} for file {filename} with '
+                     f'description {description}.')
 
-        logger.info(f'created upload {self.multipart_upload.id} for file {filename} with description '
-                    f'{description}.')
+        try:
+            final_checksum = self._upload_threads(filename, filesize, part_size)
+        except Exception:
+            logger.error(f'aborting {self.multipart_upload.id}')
+            self.multipart_upload.abort()
+            raise
 
+        logger.info(f'completing upload {self.multipart_upload.id}')
+        try:
+            ret = self.multipart_upload.complete(archiveSize=str(filesize), checksum=final_checksum)
+        except ClientError as e:
+            logger.error(f'error completing upload: {e}')
+            self.multipart_upload.abort()
+            raise
+
+        logger.info(f'upload {self.multipart_upload.id} is complete, archive id is {ret["archiveId"]}')
+        return ret['archiveId']
+
+    def _upload_threads(self, filename, filesize, part_size):
+        work_queue: queue.Queue = queue.Queue()
+        hash_queue: queue.Queue = queue.Queue()
+
+        total_parts = int((filesize / part_size) + 1)
         for part in range(total_parts):
             work_queue.put(part)
 
@@ -139,12 +158,10 @@ class Uploader():
 
         for t in ts:
             t.start()
-
         for t in ts:
             t.join()
 
         if err.is_set():
-            self.multipart_upload.abort()
             raise self.UploadFailedException('error uploading parts')
 
         res = [None] * total_parts
@@ -152,20 +169,9 @@ class Uploader():
             part, hash_ = hash_queue.get()
             res[part] = hash_
         if None in res:
-            self.multipart_upload.abort()
             raise self.UploadFailedException('error uploading parts: missing hash in result')
 
-        final_checksum = tree_hash(cast(List[bytes], res))
-        logger.info(f'completing upload {self.multipart_upload.id}')
-        try:
-            ret = self.multipart_upload.complete(archiveSize=str(filesize), checksum=final_checksum)
-        except ClientError as e:
-            logger.error(f'error completing upload: {e}')
-            self.multipart_upload.abort()
-            raise
-
-        logger.info(f'upload {self.multipart_upload.id} is complete, archive id is {ret["archiveId"]}')
-        return ret['archiveId']
+        return bytes.hex(tree_hash(cast(List[bytes], res)))
 
 
 def main():
