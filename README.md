@@ -32,10 +32,10 @@ Will install an entrypoint script `glacier-backup`.
       -d, --dryrun          only show what would be backed up
       -c CONFIG, --config CONFIG
                             config file location. defaults to
-                            ${HOME}/.config/glacier_backup/glacier_backups.conf
+                            ${HOME}/.config/glacier_backup/glacier_backup.conf
       -l LOGFILE, --logfile LOGFILE
                             backup log file. defaults to
-                            ${HOME}/.config/glacier_backup/glacier_backups.log
+                            ${HOME}/.config/glacier_backup/glacier_backup.log
       -v VAULT, --vault VAULT
                             name of vault to use
       -a ACCOUNT, --account ACCOUNT

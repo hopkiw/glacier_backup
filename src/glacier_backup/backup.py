@@ -68,10 +68,11 @@ class Backup(object):
             tempdir = tempfile.mkdtemp(prefix='glacier_backup')
             tarpath = os.path.join(tempdir, tarfilename)
 
-            logger.debug(f'tar cf {tarpath} {path}')
+            logger.info(f'creating tar achive for {path}')
             try:
                 # Create the tarball.
-                subprocess.check_call(['tar', 'cf', tarpath, path.as_posix()])
+                subprocess.check_call(['tar', 'cf', tarpath, path.as_posix()], stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL)
             except Exception as e:
                 logger.error(f'failed to tar: {e}')
                 raise e
@@ -85,14 +86,14 @@ class Backup(object):
 
         # upload can raise, but we will catch it in run()
         try:
+            logger.info(f'starting upload for {path}')
             archive_id = self.uploader.upload(upload_file_path, upload_description)
+            self.db.mark_uploaded(path.as_posix(), upload_description, archive_id)
         finally:
             if tarpath:
                 os.remove(tarpath)
 
-        self.db.mark_uploaded(tarpath, tarfilename, archive_id)
-
-    def run(self, stop_on_first: bool = False) -> None:
+    def run(self, stop_on_first: bool = True) -> None:
         """Run all configured backups"""
         for candidate in self.backup_candidates():
             try:
@@ -183,11 +184,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dryrun', help='only show what would be backed up', action='store_true')
     parser.add_argument('-c', '--config', help='config file location. defaults'
-                        ' to ${HOME}/.config/glacier_backup/glacier_backups.conf',
-                        default=os.path.join(CONFDIR, 'glacier_backups.conf'))
+                        ' to ${HOME}/.config/glacier_backup/glacier_backup.conf',
+                        default=os.path.join(CONFDIR, 'glacier_backup.conf'))
     parser.add_argument('-l', '--logfile', help='backup log file. defaults'
-                        ' to ${HOME}/.config/glacier_backup/glacier_backups.log',
-                        default=os.path.join(CONFDIR, 'glacier_backups.log'))
+                        ' to ${HOME}/.config/glacier_backup/glacier_backup.log',
+                        default=os.path.join(CONFDIR, 'glacier_backup.log'))
     parser.add_argument('-v', '--vault', help='name of vault to use')
     parser.add_argument('-a', '--account', help='account ID to use')
     parser.add_argument('-p', '--path', dest='paths', nargs='*', help=('path of file or dir to backup. will'
@@ -218,4 +219,6 @@ def main():
         Backup(config, args.dryrun).run()
     except OngoingUploadException:
         print('backup already in progress, exiting')
+        sys.exit(1)
+    except KeyboardInterrupt:
         sys.exit(1)
